@@ -1,0 +1,70 @@
+---
+title: "Assignment 5 Prediction"
+author: "Zhulin Yu"
+date: "11/14/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r Load Libraries}
+library(rpart)
+library(party)
+```
+
+```{r Load Data}
+D1 = read.csv("intelligent_tutor.csv")
+```
+
+Here are all the variables:
+id - student id prior_prob_count - The number of problems a student has done in the system prior to the surrent session
+score - The score the student achieved in the current session
+hints - The number of hints the student requested in the current session
+hint.y - Whether or not the student asked for hints in the current session
+complete - Whether or not the student completed the current session
+prior_prob_count - total number of problems solved in previous sessions
+prior_percent_correct - percentage of correct in previous sessions
+action - The action suggested by the system to a teacher about a given student based on their performance: 1 = Ask Teacher; 2 = Start New Session; 3 = Give up.
+
+# Part I
+## Build a classification tree to predict behavior
+```{r }
+c.tree <- rpart(action ~ hint.y + complete, method="class", data=D1) #Notice the standard R notion for a formula X ~ Y
+
+#Look at the error of this tree
+printcp(c.tree)
+
+#Plot the tree
+post(c.tree, file = "tree.ps", title = "Session Completion Action: 1 - Ask teacher, 2 - Start new session, 3 - Give up")
+
+```
+
+# Part II
+## Build a regression tree to predict students' final scores, which determine what tpye of intervention is preferred.
+
+Visulaize score data to decide "leaves"
+```{r}
+hist(D1$score)
+
+```
+
+Define "Leaves": score <= 0.4, intervene; score between 0.4 and 0.8, monitor; score >= 0.8, no action.
+Then generate the regression tree by using ctree. And plot.
+```{r}
+D1$advice <- ifelse(D1$score <=0.4, "intervene", ifelse(D1$score > 0.4 & D1$score <=0.8, "monitor", "no action"))
+score_ctree <- ctree(factor(advice) ~ prior_prob_count + prior_percent_correct + hints, D1)
+plot(score_ctree)
+```
+As shown in the figure above, intervention decisions would be made in the following procedure:
+1, If one has asked for hints:
+    1.1, And he/she asked for more than 12 hints, we do not need to take any actions.
+    1.2, But he/she asked for 12 hints or less, we will check his/her preiovus precentage of correctness:
+        1.2.1, If the percentage is 0.629 or less, we might want to moniter him/her or even intervene.
+        1.2.2, If the percentage is higher than 0.629, we might want to moniter him/her.
+        * However, p = 0.047 and it indicates that the difference between the two groups, if only considering the mean, is marginally             significant. Therefore, it could be quite objective to make the decision.
+2, If he/she never asked for hints:
+    2.1, And he/she has solved 85 or less problems before, we might want to monitor or take no action.
+    2.2, And he/she has solved more than 85 problems, we would take no action.
+    
+To conclude, I would recommend to pay more attention to number of hints (hints) and total number of problems solved before (prior_prob_count). Finally, based on this dataset, it seems to
